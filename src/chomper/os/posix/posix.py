@@ -1094,14 +1094,15 @@ class PosixOs(ABC):
             entry = self._get_fd_entry(fd)
 
             chunk_size = 1024 * 1024
-            content = b""
+            chunks = []
 
             while True:
                 chunk = self.read(fd, chunk_size)
                 if not chunk:
                     break
-                content += chunk
+                chunks.append(chunk)
 
+            content = b"".join(chunks)
             self.emu.write_bytes(addr, content[offset:])
 
             self._mapping_files[addr] = entry.path
