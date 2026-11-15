@@ -866,9 +866,29 @@ class Chomper:
             size = self.arch.addr_size
 
         data = self.read_bytes(begin, end - begin)
+        offsets = range(0, len(data), size)
         array = []
 
-        for offset in range(0, len(data), size):
+        if (
+            type(data) in (bytes, bytearray)
+            and data
+            and type(size) is int
+            and size in (1, 2, 4, 8)
+            and type(signed) is bool
+            and type(self.endian) is str
+            and self.endian in ("little", "big")
+        ):
+            from struct import unpack_from
+
+            count = len(data) // size
+            code = {1: "b", 2: "h", 4: "i", 8: "q"}[size]
+            if not signed:
+                code = code.upper()
+            prefix = "<" if self.endian == "little" else ">"
+            array = list(unpack_from(f"{prefix}{count}{code}", data))
+            offsets = range(count * size, len(data), size)
+
+        for offset in offsets:
             int_bytes = data[offset : offset + size]
             value = int.from_bytes(int_bytes, byteorder=self.endian, signed=signed)
             array.append(value)
