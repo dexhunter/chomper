@@ -1,0 +1,60 @@
+[
+  {
+    "upstream_repo": "lycheech33/chomper",
+    "head_sha": "f75f479833dff04033778df1034bc0373c995992",
+    "file": "src/chomper/core.py",
+    "function": "Chomper.read_array",
+    "native_test_cmd": "python3 -m pytest tests/test_utils.py tests/test_emulator.py tests/test_libc.py -q -k \"not emu_ios and not (test_read and not test_read_and) and not test_write and not test_readdir and not test_mkdir and not test_access and not test_link\"",
+    "bench_cmd": "python3 osspr-intake/harness/read_array_allocs.py",
+    "metric_kind": "allocations",
+    "baseline_value": 81911,
+    "baseline_noise_pct": 0.0,
+    "metric_benchmark": "python3 osspr-intake/harness/read_array_allocs.py",
+    "labeled_data": null,
+    "tests_pass_on_baseline": true,
+    "workload": "Read 16384 little-endian u64 pointers (128 KiB) from guest memory, the shape of a large ELF or Mach-O relocation or pointer section.",
+    "notes": "Each element is decoded from a freshly sliced bytes object, so this call performs 81911 PyObject allocations (identical across 5 processes; noise is (max-min)/median). struct.unpack of the same buffer returns the same integers in about 16400 allocations, about 65000 fewer. ELFLoader._get_init_array calls read_array while the offline libc tests load libc.so. Overlap: no open upstream PRs. Merged in the last 30 days were #263 (arm64e: ios fixup/hooks/ios.py/mach/syscall/sysctl/xpc) and #264 (PosixOs.mmap only, author dexhunter). Neither touches core.py. dexhunter has no other lycheech33/chomper PR. Open issue #214 is Mach-O chained fixups, not this helper, and nothing says read_array is being refactored, deprecated, or moved."
+  },
+  {
+    "upstream_repo": "lycheech33/chomper",
+    "head_sha": "f75f479833dff04033778df1034bc0373c995992",
+    "file": "src/chomper/core.py",
+    "function": "Chomper.read_string",
+    "native_test_cmd": "python3 -m pytest tests/test_utils.py tests/test_emulator.py tests/test_libc.py -q -k \"not emu_ios and not (test_read and not test_read_and) and not test_write and not test_readdir and not test_mkdir and not test_access and not test_link\"",
+    "bench_cmd": "python3 osspr-intake/harness/read_string_allocs.py",
+    "metric_kind": "allocations",
+    "baseline_value": 114693,
+    "baseline_noise_pct": 0.0,
+    "metric_benchmark": "python3 osspr-intake/harness/read_string_allocs.py",
+    "labeled_data": null,
+    "tests_pass_on_baseline": true,
+    "workload": "Read back an 8 MiB ASCII JSON record blob with no interior NUL from guest memory, as a large token or response C string.",
+    "notes": "read_string appends every 1024-byte read onto an immutable bytes object. On this buffer that is 114693 allocations, identical across 5 processes. Keeping the chunks and joining once still decodes the same text, drops 8189 intermediate buffers, and cuts the call from about 2.2 s to about 20 ms. tests/test_emulator.py::test_read_and_write_string and the libc string tests cover it. Overlap: #264 joined chunks inside PosixOs.mmap only and did not change read_string. #263 did not touch core.py. No open PRs. No issue marks read_string as refactor, deprecation, or a move. dexhunter's only chomper PR is #264."
+  },
+  {
+    "upstream_repo": "lycheech33/chomper",
+    "head_sha": "f75f479833dff04033778df1034bc0373c995992",
+    "file": "src/chomper/loader/elf.py",
+    "function": "ELFLoader._load_symbols",
+    "native_test_cmd": "python3 -m pytest tests/test_utils.py tests/test_emulator.py tests/test_libc.py -q -k \"not emu_ios and not (test_read and not test_read_and) and not test_write and not test_readdir and not test_mkdir and not test_access and not test_link\"",
+    "bench_cmd": "python3 osspr-intake/harness/load_symbols_ms.py",
+    "baseline_median_ms": 73.778229,
+    "baseline_noise_pct": 5.609,
+    "tests_pass_on_baseline": true,
+    "workload": "Parse dynamic symbols from rootfs/android/system/lib64/libc.so, the arm64 bionic libc the offline tests load.",
+    "notes": "Median of 5 fresh processes is 73.778 ms; full spread (max-min)/median is 5.609%. DynamicSegment.iter_symbols re-parses the dynamic tag list per symbol. Iterating the same .dynsym via the section table took about 19 ms and produced the identical 1198 exported symbols (name, address, type). A local fallback to that section when it exists, keeping the dynamic walk for stripped files, stays inside _load_symbols. The libc fixtures in tests/test_emulator.py and tests/test_libc.py call it. Overlap: loader/elf.py is not in #263 or #264, there are no open PRs, and open issue #214 is about Mach-O chained fixups rather than ELF symbol loading. No commit in the last 30 days says this loader is being refactored or moved. dexhunter's only PR is #264."
+  },
+  {
+    "upstream_repo": "lycheech33/chomper",
+    "head_sha": "f75f479833dff04033778df1034bc0373c995992",
+    "file": "src/chomper/memory.py",
+    "function": "MemoryManager.alloc",
+    "native_test_cmd": "python3 -m pytest tests/test_utils.py tests/test_emulator.py tests/test_libc.py -q -k \"not emu_ios and not (test_read and not test_read_and) and not test_write and not test_readdir and not test_mkdir and not test_access and not test_link\"",
+    "bench_cmd": "python3 osspr-intake/harness/memory_alloc_ms.py",
+    "baseline_median_ms": 159.233079,
+    "baseline_noise_pct": 4.996,
+    "tests_pass_on_baseline": true,
+    "workload": "Satisfy 8192 allocations of 16 bytes, filling the 16-byte pool and a second pool the way hook_malloc does for many short guest buffers.",
+    "notes": "Median of 5 fresh processes is 159.233 ms; full spread (max-min)/median is 4.996%. alloc finds a free slot with list.index over up to 8192 flags, so filling a pool is quadratic. A first-fit cursor or free-list that still returns the lowest free index removes that scan; free must record holes so the addresses stay the same. The scan itself is inside alloc. tests/test_emulator.py::test_create_buffer and tests/test_libc.py::test_malloc (Android malloc hook) cover it. memory.py is not in #263 or #264. No open PRs. Issue #193 is a suspected objc leak, not a rewrite of this allocator. dexhunter's only PR is #264, which is PosixOs.mmap."
+  }
+]
