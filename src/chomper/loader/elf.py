@@ -1,11 +1,12 @@
 import os
 from itertools import chain
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, cast
 
 from elftools.elf.dynamic import DynamicSegment
 from elftools.elf.elffile import ELFFile
 from elftools.elf.enums import ENUM_RELOC_TYPE_AARCH64, ENUM_RELOC_TYPE_ARM
 from elftools.elf.relocation import Relocation
+from elftools.elf.sections import SymbolTableSection
 
 from chomper import const
 from chomper.utils import aligned, to_unsigned
@@ -45,10 +46,10 @@ class ELFLoader(BaseLoader):
 
         dynsym = elffile.get_section_by_name(".dynsym")
         if dynsym is not None:
-            symbol_iterator = dynsym.iter_symbols()
+            symbol_iterator = cast(SymbolTableSection, dynsym).iter_symbols()
         else:
             symbol_iterator = chain.from_iterable(
-                segment.iter_symbols()
+                cast(DynamicSegment, segment).iter_symbols()
                 for segment in elffile.iter_segments(type="PT_DYNAMIC")
             )
 
