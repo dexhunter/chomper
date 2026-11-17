@@ -43,50 +43,32 @@ class ELFLoader(BaseLoader):
         """Get symbols in the module."""
         symbols = []
 
-        def iter_symbols(segment):
-            if type(segment) is not DynamicSegment:
-                yield from segment.iter_symbols()
-                return
+        dynsym = elffile.get_section_by_name(".dynsym")
+        if dynsym is not None:
+            symbol_iterator = dynsym.iter_symbols()
+        else:
+            symbol_iterator = chain.from_iterable(
+                segment.iter_symbols()
+                for segment in elffile.iter_segments(type="PT_DYNAMIC")
+            )
 
-            from elftools.common.exceptions import ELFError
-            from elftools.common.utils import struct_parse
-            from elftools.elf.sections import Symbol as ELFSymbol
+        for symbol in symbol_iterator:
+            if symbol.entry["st_info"]["bind"] in ("STB_GLOBAL", "STB_WEAK"):
+                if symbol.entry["st_shndx"] == "SHN_UNDEF":
+                    continue
 
-            count = segment.num_symbols()
-            if not count:
-                return
-            table_address, table_offset = segment.get_table_offset("DT_SYMTAB")
-            if table_address is None or table_offset is None:
-                raise ELFError("Segment does not contain DT_SYMTAB.")
-
-            parser = segment.elfstructs.Elf_Sym
-            stream = segment._stream
-            symbol_size = segment._symbol_size
-            string_table = segment._get_stringtable()
-            for index in range(count):
-                entry = struct_parse(
-                    parser, stream, stream_pos=table_offset + index * symbol_size
+                symbol_type = (
+                    SymbolType.FUNC
+                    if symbol.entry["st_info"]["type"] == "STT_FUNC"
+                    else SymbolType.OTHER
                 )
-                yield ELFSymbol(entry, string_table.get_string(entry["st_name"]))
 
-        for segment in elffile.iter_segments(type="PT_DYNAMIC"):
-            for symbol in iter_symbols(segment):
-                if symbol.entry["st_info"]["bind"] in ("STB_GLOBAL", "STB_WEAK"):
-                    if symbol.entry["st_shndx"] == "SHN_UNDEF":
-                        continue
-
-                    symbol_type = (
-                        SymbolType.FUNC
-                        if symbol.entry["st_info"]["type"] == "STT_FUNC"
-                        else SymbolType.OTHER
-                    )
-
-                    symbol_struct = Symbol(
-                        address=module_base + symbol.entry["st_value"],
-                        name=symbol.name,
-                        type=symbol_type,
-                    )
-                    symbols.append(symbol_struct)
+                symbol_struct = Symbol(
+                    address=module_base + symbol.entry["st_value"],
+                    name=symbol.name,
+                    type=symbol_type,
+                )
+                symbols.append(symbol_struct)
 
         return symbols
 
